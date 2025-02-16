@@ -1,5 +1,10 @@
 # from app import app
 from flask import request
+from bson import ObjectId
+import logging
+from typing import Optional, Tuple
+import traceback
+from mongo import collection
 import torch
 from pine import index, tokenizer, model
 
@@ -7,8 +12,14 @@ from pine import index, tokenizer, model
 # def home_page():
 #     return {'message': 'Hello, World!'}
 
-def store_chunk_in_mongo(chunk):
-    pass
+
+def store_chunk_in_mongo(file_path: str, chunk: str) -> Tuple[bool, Optional[str], Optional[str]]:
+    document = {
+        "file_path": file_path,
+        "content": chunk
+    }
+    result = collection.insert_one(document)
+    return str(result.inserted_id)
 
 def embed_chunk(chunk):
     tokens = tokenizer(chunk, return_tensors="pt", padding=True, truncation=True)
@@ -23,6 +34,9 @@ def store_embedding(embeddings, id):
     index.upsert([(str(id), embeddings)])
 
 def process_chunk(chunk):
+
+    # id = store_chunk_in_mongo(chunk)
+
     # call store_chunk_in_mongo(chunk)
 
     # call embed_chunk(chunk)
@@ -45,7 +59,7 @@ def process_document(file, file_path):
 #         if "files" not in request.files:
 #             return "No file part"
 
-    # for each file, call process_document(file, file_path)
+#     # for each file, call process_document(file, file_path)
 
     # return {'success': True}
 
@@ -87,6 +101,4 @@ def generate_summary(chunks):
     return {'success': True}
 
 if __name__ == '__main__':
-    chunk = 'this is a test chunk'
-    embeddings = embed_chunk(chunk)
-    store_embedding(embeddings, 1)
+  pass
