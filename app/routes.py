@@ -68,7 +68,6 @@ def embed_folder():
     return {'success': True}, 200
 
 def similarity_search(embedding):
-    # query from the index, eg: [0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3]
     response = index.query(
         vector=embedding,
         top_k=2,
