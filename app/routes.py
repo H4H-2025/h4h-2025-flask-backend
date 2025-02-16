@@ -1,23 +1,23 @@
-# from app import app
+from app import app
 from flask import request
 from bson import ObjectId
 import logging
 from typing import Optional, Tuple
 import traceback
-from mongo import collection
+from .mongo import collection
 import torch
-from pine import index, tokenizer, model
 from openai import OpenAI
-import os
 from typing import List, Tuple
 from bson import ObjectId
 import traceback
-
 client = OpenAI(api_key="")
+from .pine import index, tokenizer, model
+from .parser import parse_pdf
+import json
 
-# @app.route('/', methods=['GET'])
-# def home_page():
-#     return {'message': 'Hello, World!'}
+@app.route('/', methods=['GET'])
+def home_page():
+    return {'message': 'Hello, World!'}
 
 
 def store_chunk_in_mongo(file_path, chunk):
@@ -28,13 +28,13 @@ def store_chunk_in_mongo(file_path, chunk):
     result = collection.insert_one(document)
     return str(result.inserted_id)
 
-def store_chunk_in_pinecone(chunk):
-    tokens = tokenizer(chunk, return_tensors="pt", padding=True, truncation=False)
+def embed_chunk(chunk):
+    tokens = tokenizer(chunk, return_tensors="pt", padding=True, truncation=True, max_length=512)
 
     with torch.no_grad():
         outputs = model(**tokens)
 
-    embeddings = outputs.last_hidden_state.squeeze().flatten().tolist()
+    embeddings = outputs.last_hidden_state.mean(dim=1).squeeze().tolist()
     return embeddings
 
 def store_embedding(embeddings, id):
@@ -42,7 +42,7 @@ def store_embedding(embeddings, id):
 
 def process_chunk(file_path, chunk):
     id = store_chunk_in_mongo(file_path, chunk)
-    embeddings = store_chunk_in_pinecone(chunk)
+    embeddings = embed_chunk(chunk)
     store_embedding(embeddings, id)
     return id
 
@@ -55,35 +55,32 @@ def chunk_document(file):
     return chunks
 
 def process_document(file_path, file):
-    # chunk_document(file)
+    chunks = chunk_document(file)
+    for chunk in chunks:
+        process_chunk(file_path, chunk)
+    return {'success': True}
 
-    # for each chunk, call process_chunk(chunk)
+@app.route('/embed_folder', methods=['POST'])
+def embed_folder():
+    files = request.files.getlist('files')
+    pathnames = request.form.getlist('pathnames')
 
-    # return 
-    pass
-
-# @app.route('/embed_folder', methods=['POST'])
-# def embed_folder():
-
-#     if request.method == "POST":
-#         if "files" not in request.files:
-#             return "No file part"
-
-#     # for each file, call process_document(file, file_path)
-
-    # return {'success': True}
+    for file, pathname in zip(files, pathnames):
+        file_content = parse_pdf(file)
+        if not process_document(pathname, file_content):
+            return {'success': False}, 401
+    
+    return {'success': True}, 200
 
 def similarity_search(embedding):
-    response = index.query(namespace="ns1", vector=embedding, top_k=2, include_values=True, include_metadata=True,)
-    context = ""
-    for match in response['matches']:
-        results = client['chunks']['shadcn'].find_one({ "_id" : ObjectId(match['id']) })
-        content = results['chunk']
-        context += content
-        context += '\n\n'
-    return context
-    # call pinecone to get similar embeddings
-    # return similar embeddings
+    response = index.query(
+        vector=embedding,
+        top_k=2,
+        include_values=True
+    )
+    
+    response = json.loads(str(response).replace("'", '"'))
+    return [r['id'] for r in response['matches']]
 
 def retrieve_chunks(ids: List[str]) -> List[Tuple[str, str]]:
     try:
@@ -113,7 +110,7 @@ def retrieve_chunks(ids: List[str]) -> List[Tuple[str, str]]:
         traceback.print_exc()
         return [(None, None)] * len(ids)
 
-def generate_summary(chunks):
+def generate_summary():
     # feed chunks into llm
     # return summaries
     summaries = []
@@ -135,15 +132,13 @@ def generate_summary(chunks):
 def embed_query(query):
     return embed_chunk(query)
 
-# @app.route('/submit_query', methods=['GET'])
-# def submit_query():
-    # get query from request
+@app.route('/submit_query', methods=['GET'])
+def submit_query():
+    q = request.args.get('q')
+    embedding = embed_query(q)
+    ids = similarity_search(embedding)
 
-    # call embed_query(query)
-
-    # call similarity_search(embedding)
-
-    # call retrieve_chunks(ids)
+    call retrieve_chunks(ids)
 
     # call generate_summary(chunks)
 
@@ -152,4 +147,6 @@ def embed_query(query):
     return {'success': True}
 
 if __name__ == '__main__':
-    pass
+    file_path = "test.txt"
+    file = "This is a test file"
+    print(process_document(file_path, file))
