@@ -13,7 +13,7 @@ from pine import index, tokenizer, model
 #     return {'message': 'Hello, World!'}
 
 
-def store_chunk_in_mongo(file_path: str, chunk: str) -> Tuple[bool, Optional[str], Optional[str]]:
+def store_chunk_in_mongo(file_path, chunk):
     document = {
         "file_path": file_path,
         "content": chunk
@@ -33,16 +33,13 @@ def embed_chunk(chunk):
 def store_embedding(embeddings, id):
     index.upsert([(str(id), embeddings)])
 
-def process_chunk(chunk):
+def process_chunk(file_path, chunk):
+    id = store_chunk_in_mongo(file_path, chunk)
+    embeddings = embed_chunk(chunk)
+    store_embedding(embeddings, id)
+    return id
 
-    # id = store_chunk_in_mongo(chunk)
 
-    # call store_chunk_in_mongo(chunk)
-
-    # call embed_chunk(chunk)
-
-    # call store_embedding(embedding, id)
-    pass
 
 def process_document(file, file_path):
     # chunk document
@@ -101,4 +98,6 @@ def generate_summary(chunks):
     return {'success': True}
 
 if __name__ == '__main__':
-  pass
+    chunk = "This is a test chunk"
+    file_path = "test_file.txt"
+    print(process_chunk(file_path, chunk))
