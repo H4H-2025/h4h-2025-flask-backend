@@ -1,22 +1,28 @@
-from app import app
+# from app import app
 from flask import request
-import os
+import torch
+from pine import index, tokenizer, model
 
-@app.route('/', methods=['GET'])
-def home_page():
-    return {'message': 'Hello, World!'}
+# @app.route('/', methods=['GET'])
+# def home_page():
+#     return {'message': 'Hello, World!'}
 
 def store_chunk_in_mongo(chunk):
     pass
 
 def embed_chunk(chunk):
-    pass
+    tokens = tokenizer(chunk, return_tensors="pt", padding=True, truncation=True)
 
-def store_embedding(embedding, id):
-    pass
+    with torch.no_grad():
+        outputs = model(**tokens)
+
+    embeddings = outputs.last_hidden_state.squeeze().flatten().tolist()
+    return embeddings
+
+def store_embedding(embeddings, id):
+    index.upsert([(str(id), embeddings)])
 
 def process_chunk(chunk):
-    chunk = "This is a test chunk"
     # call store_chunk_in_mongo(chunk)
 
     # call embed_chunk(chunk)
@@ -32,16 +38,16 @@ def process_document(file, file_path):
     # return 
     pass
 
-@app.route('/embed_folder', methods=['POST'])
-def embed_folder():
+# @app.route('/embed_folder', methods=['POST'])
+# def embed_folder():
 
-    if request.method == "POST":
-        if "files" not in request.files:
-            return "No file part"
+#     if request.method == "POST":
+#         if "files" not in request.files:
+#             return "No file part"
 
     # for each file, call process_document(file, file_path)
 
-    return {'success': True}
+    # return {'success': True}
 
 
 def embed_query(query):
@@ -64,8 +70,8 @@ def generate_summary(chunks):
     # return summaries
     pass
 
-@app.route('/submit_query', methods=['GET'])
-def submit_query():
+# @app.route('/submit_query', methods=['GET'])
+# def submit_query():
     # get query from request
 
     # call embed_query(query)
@@ -79,3 +85,8 @@ def submit_query():
     # return chunks, summaries, file_paths
 
     return {'success': True}
+
+if __name__ == '__main__':
+    chunk = 'this is a test chunk'
+    embeddings = embed_chunk(chunk)
+    store_embedding(embeddings, 1)
