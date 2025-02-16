@@ -1,5 +1,4 @@
 from app import app
-from flask import request
 from bson import ObjectId
 import logging
 from typing import Optional, Tuple
@@ -13,6 +12,7 @@ import traceback
 from .pine import index, tokenizer, model
 from .parser import parse_pdf, parse_docx
 import json
+from flask import Flask, request, jsonify
 
 client = Groq(api_key="")
 
@@ -135,14 +135,33 @@ def generate_summary(chunks):
 def embed_query(query):
     return embed_chunk(query)
 
-@app.route('/submit_query', methods=['GET'])
+@app.route('/submit_query', methods=['POST'])
 def submit_query():
-    q = request.args.get('q')
-    embedding = embed_query(q)
-    ids = similarity_search(embedding)
-    file_paths, chunks = retrieve_chunks(ids)
-    summaries = generate_summary(chunks)
-    return {"chunks" : chunks, "summaries" : summaries, "file_paths" : file_paths}
+    data = request.get_json()
+    
+    if not data or "queries" not in data:
+        return jsonify({"error": "No queries provided"}), 400
+
+    queries = data["queries"]
+    
+    if not isinstance(queries, list):
+        return jsonify({"error": "Queries should be a list"}), 400
+    
+    results = []
+
+    for query in queries:
+        embedding = embed_query(query)
+        ids = similarity_search(embedding)
+        file_paths, chunks = retrieve_chunks(ids)
+
+        if not chunks:
+            results.append({"query": query, "summary": "No relevant documents found."})
+            continue
+
+        summary = generate_summary(chunks)
+        results.append({"query": query, "summary": summary})
+    
+    return jsonify({"results": results})
 
 if __name__ == '__main__':
     pass
