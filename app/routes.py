@@ -48,12 +48,10 @@ def chunk_document(file):
     return chunks
 
 def process_document(file_path, file):
-    # chunk_document(file)
-
-    # for each chunk, call process_chunk(chunk)
-
-    # return 
-    pass
+    chunks = chunk_document(file)
+    for chunk in chunks:
+        process_chunk(file_path, chunk)
+    return {'success': True}
 
 # @app.route('/embed_folder', methods=['POST'])
 # def embed_folder():
@@ -108,4 +106,6 @@ def embed_query(query):
     return {'success': True}
 
 if __name__ == '__main__':
-    pass
+    file_path = "test.txt"
+    file = "This is a test file"
+    print(process_document(file_path, file))
