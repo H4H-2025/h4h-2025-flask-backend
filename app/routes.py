@@ -7,13 +7,14 @@ import traceback
 from .mongo import collection
 import torch
 from groq import Groq
-client = Groq(api_key="")
 from typing import List, Tuple
 from bson import ObjectId
 import traceback
 from .pine import index, tokenizer, model
 from .parser import parse_pdf, parse_docx
 import json
+
+client = Groq(api_key="")
 
 @app.route('/', methods=['GET'])
 def home_page():
@@ -66,7 +67,14 @@ def embed_folder():
     pathnames = request.form.getlist('pathnames')
 
     for file, pathname in zip(files, pathnames):
-        file_content = parse_docx(file)
+        file_content = ""
+        if file.filename.endswith('.pdf'):
+            file_content = parse_pdf(file)
+        elif file.filename.endswith('.docx'):
+            file_content = parse_docx(file)
+        else:
+            return {'success': False}, 401
+
         if not process_document(pathname, file_content):
             return {'success': False}, 401
     
@@ -75,7 +83,7 @@ def embed_folder():
 def similarity_search(embedding):
     response = index.query(
         vector=embedding,
-        top_k=2,
+        top_k=5,
         include_values=True
     )
     
