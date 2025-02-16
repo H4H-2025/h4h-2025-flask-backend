@@ -1,16 +1,17 @@
-# from app import app
+from app import app
 from flask import request
 from bson import ObjectId
 import logging
 from typing import Optional, Tuple
 import traceback
-from mongo import collection
+from .mongo import collection
 import torch
-from pine import index, tokenizer, model
+from .pine import index, tokenizer, model
+from .parser import parse_pdf
 
-# @app.route('/', methods=['GET'])
-# def home_page():
-#     return {'message': 'Hello, World!'}
+@app.route('/', methods=['GET'])
+def home_page():
+    return {'message': 'Hello, World!'}
 
 
 def store_chunk_in_mongo(file_path, chunk):
@@ -22,12 +23,12 @@ def store_chunk_in_mongo(file_path, chunk):
     return str(result.inserted_id)
 
 def store_chunk_in_pinecone(chunk):
-    tokens = tokenizer(chunk, return_tensors="pt", padding=True, truncation=False)
+    tokens = tokenizer(chunk, return_tensors="pt", padding=True, truncation=True, max_length=512)
 
     with torch.no_grad():
         outputs = model(**tokens)
 
-    embeddings = outputs.last_hidden_state.squeeze().flatten().tolist()
+    embeddings = outputs.last_hidden_state.mean(dim=1).squeeze().tolist()
     return embeddings
 
 def store_embedding(embeddings, id):
@@ -53,16 +54,17 @@ def process_document(file_path, file):
         process_chunk(file_path, chunk)
     return {'success': True}
 
-# @app.route('/embed_folder', methods=['POST'])
-# def embed_folder():
+@app.route('/embed_folder', methods=['POST'])
+def embed_folder():
+    files = request.files.getlist('files')
+    pathnames = request.form.getlist('pathnames')
 
-#     if request.method == "POST":
-#         if "files" not in request.files:
-#             return "No file part"
-
-#     # for each file, call process_document(file, file_path)
-
-    # return {'success': True}
+    for file, pathname in zip(files, pathnames):
+        file_content = parse_pdf(file)
+        if not process_document(pathname, file_content):
+            return {'success': False}, 401
+    
+    return {'success': True}, 200
 
 def similarity_search(embedding):
     response = index.query(namespace="ns1", vector=embedding, top_k=2, include_values=True, include_metadata=True,)
@@ -81,7 +83,7 @@ def retrieve_chunks(ids):
     # return chunks
     pass
 
-def generate_summary(chunks):
+def generate_summary():
     # feed chunks into llm
     # return summaries
     pass
