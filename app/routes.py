@@ -5,10 +5,13 @@ import logging
 from typing import Optional, Tuple
 import traceback
 from mongo import collection
+import torch
+from pine import index, tokenizer, model
 
 # @app.route('/', methods=['GET'])
 # def home_page():
 #     return {'message': 'Hello, World!'}
+
 
 def store_chunk_in_mongo(file_path: str, chunk: str) -> Tuple[bool, Optional[str], Optional[str]]:
     document = {
@@ -19,12 +22,19 @@ def store_chunk_in_mongo(file_path: str, chunk: str) -> Tuple[bool, Optional[str
     return str(result.inserted_id)
 
 def embed_chunk(chunk):
-    pass
+    tokens = tokenizer(chunk, return_tensors="pt", padding=True, truncation=True)
 
-def store_embedding(embedding, id):
-    pass
+    with torch.no_grad():
+        outputs = model(**tokens)
+
+    embeddings = outputs.last_hidden_state.squeeze().flatten().tolist()
+    return embeddings
+
+def store_embedding(embeddings, id):
+    index.upsert([(str(id), embeddings)])
 
 def process_chunk(chunk):
+
     # id = store_chunk_in_mongo(chunk)
 
     # call store_chunk_in_mongo(chunk)
@@ -51,7 +61,7 @@ def process_document(file, file_path):
 
 #     # for each file, call process_document(file, file_path)
 
-#     return {'success': True}
+    # return {'success': True}
 
 
 def embed_query(query):
@@ -91,6 +101,4 @@ def generate_summary(chunks):
     return {'success': True}
 
 if __name__ == '__main__':
-    file_path = "test/test_chunk"
-    chunk = "This is a test chunk"
-    print(store_chunk_in_mongo(file_path, chunk))
+  pass
