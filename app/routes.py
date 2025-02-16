@@ -7,13 +7,13 @@ import traceback
 from mongo import collection
 import torch
 from pine import index, tokenizer, model
-from openai import OpenAI
+from groq import Groq
 import os
 from typing import List, Tuple
 from bson import ObjectId
 import traceback
 
-client = OpenAI(api_key="")
+client = Groq(api_key="")
 
 # @app.route('/', methods=['GET'])
 # def home_page():
@@ -114,15 +114,13 @@ def retrieve_chunks(ids: List[str]) -> List[Tuple[str, str]]:
         return [(None, None)] * len(ids)
 
 def generate_summary(chunks):
-    # feed chunks into llm
-    # return summaries
     summaries = []
     
     for chunk in chunks:
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="mixtral-8x7b-32768",  
             messages=[
-                {"role": "system", "content": "Generate a concise summary of the following text knowing that a scientist is reading it."},
+                {"role": "system", "content": "You are a direct summarizer. Provide only a concise summary of the input text without any prefixes, meta-commentary, or formatting. If the input is too short or lacks substance, simply return 'Input too brief to summarize.'"},
                 {"role": "user", "content": chunk}
             ],
             temperature=0.7,
@@ -152,4 +150,4 @@ def embed_query(query):
     return {'success': True}
 
 if __name__ == '__main__':
-    pass
+    # pass
