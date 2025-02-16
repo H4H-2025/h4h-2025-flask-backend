@@ -8,6 +8,7 @@ from .mongo import collection
 import torch
 from .pine import index, tokenizer, model
 from .parser import parse_pdf
+import json
 
 @app.route('/', methods=['GET'])
 def home_page():
@@ -22,7 +23,7 @@ def store_chunk_in_mongo(file_path, chunk):
     result = collection.insert_one(document)
     return str(result.inserted_id)
 
-def store_chunk_in_pinecone(chunk):
+def embed_chunk(chunk):
     tokens = tokenizer(chunk, return_tensors="pt", padding=True, truncation=True, max_length=512)
 
     with torch.no_grad():
@@ -36,7 +37,7 @@ def store_embedding(embeddings, id):
 
 def process_chunk(file_path, chunk):
     id = store_chunk_in_mongo(file_path, chunk)
-    embeddings = store_chunk_in_pinecone(chunk)
+    embeddings = embed_chunk(chunk)
     store_embedding(embeddings, id)
     return id
 
@@ -67,16 +68,15 @@ def embed_folder():
     return {'success': True}, 200
 
 def similarity_search(embedding):
-    response = index.query(namespace="ns1", vector=embedding, top_k=2, include_values=True, include_metadata=True,)
-    context = ""
-    for match in response['matches']:
-        results = client['chunks']['shadcn'].find_one({ "_id" : ObjectId(match['id']) })
-        content = results['chunk']
-        context += content
-        context += '\n\n'
-    return context
-    # call pinecone to get similar embeddings
-    # return similar embeddings
+    # query from the index, eg: [0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3]
+    response = index.query(
+        vector=embedding,
+        top_k=2,
+        include_values=True
+    )
+    
+    response = json.loads(str(response).replace("'", '"'))
+    return [r['id'] for r in response['matches']]
 
 def retrieve_chunks(ids):
     # for each id, retrieve chunk from pinecone
@@ -91,15 +91,13 @@ def generate_summary():
 def embed_query(query):
     return embed_chunk(query)
 
-# @app.route('/submit_query', methods=['GET'])
-# def submit_query():
-    # get query from request
+@app.route('/submit_query', methods=['GET'])
+def submit_query():
+    q = request.args.get('q')
+    embedding = embed_query(q)
+    ids = similarity_search(embedding)
 
-    # call embed_query(query)
-
-    # call similarity_search(embedding)
-
-    # call retrieve_chunks(ids)
+    call retrieve_chunks(ids)
 
     # call generate_summary(chunks)
 
