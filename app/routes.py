@@ -7,6 +7,13 @@ import traceback
 from mongo import collection
 import torch
 from pine import index, tokenizer, model
+from openai import OpenAI
+import os
+from typing import List, Tuple
+from bson import ObjectId
+import traceback
+
+client = OpenAI(api_key="")
 
 # @app.route('/', methods=['GET'])
 # def home_page():
@@ -78,15 +85,52 @@ def similarity_search(embedding):
     # call pinecone to get similar embeddings
     # return similar embeddings
 
-def retrieve_chunks(ids):
-    # for each id, retrieve chunk from pinecone
-    # return chunks
-    pass
+def retrieve_chunks(ids: List[str]) -> List[Tuple[str, str]]:
+    try:
+        object_ids = [ObjectId(id_str) for id_str in ids]
+        
+        chunks = collection.find({'_id': {'$in': object_ids}})
+        
+        chunks_list = list(chunks)
+        
+        chunks_dict = {
+            str(chunk['_id']): (chunk['file_path'], chunk['content']) 
+            for chunk in chunks_list
+        }
+        
+        results = []
+        for id_str in ids:
+            if id_str in chunks_dict:
+                results.append(chunks_dict[id_str])
+            else:
+                print(f"Document with id {id_str} not found")
+                results.append((None, None))
+                
+        return results
+        
+    except Exception as e:
+        print(f"Error retrieving chunks: {str(e)}")
+        traceback.print_exc()
+        return [(None, None)] * len(ids)
 
 def generate_summary(chunks):
     # feed chunks into llm
     # return summaries
-    pass
+    summaries = []
+    
+    for chunk in chunks:
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "Generate a concise summary of the following text knowing that a scientist is reading it."},
+                {"role": "user", "content": chunk}
+            ],
+            temperature=0.7,
+            max_tokens=150
+        )
+        summaries.append(response.choices[0].message.content)
+    
+    return summaries
 
 def embed_query(query):
     return embed_chunk(query)
