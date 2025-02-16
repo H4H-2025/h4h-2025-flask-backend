@@ -1,13 +1,22 @@
-from app import app
+# from app import app
 from flask import request
-import os
+from bson import ObjectId
+import logging
+from typing import Optional, Tuple
+import traceback
+from mongo import collection
 
-@app.route('/', methods=['GET'])
-def home_page():
-    return {'message': 'Hello, World!'}
+# @app.route('/', methods=['GET'])
+# def home_page():
+#     return {'message': 'Hello, World!'}
 
-def store_chunk_in_mongo(chunk):
-    pass
+def store_chunk_in_mongo(file_path: str, chunk: str) -> Tuple[bool, Optional[str], Optional[str]]:
+    document = {
+        "file_path": file_path,
+        "content": chunk
+    }
+    result = collection.insert_one(document)
+    return str(result.inserted_id)
 
 def embed_chunk(chunk):
     pass
@@ -16,7 +25,8 @@ def store_embedding(embedding, id):
     pass
 
 def process_chunk(chunk):
-    chunk = "This is a test chunk"
+    # id = store_chunk_in_mongo(chunk)
+
     # call store_chunk_in_mongo(chunk)
 
     # call embed_chunk(chunk)
@@ -32,16 +42,16 @@ def process_document(file, file_path):
     # return 
     pass
 
-@app.route('/embed_folder', methods=['POST'])
-def embed_folder():
+# @app.route('/embed_folder', methods=['POST'])
+# def embed_folder():
 
-    if request.method == "POST":
-        if "files" not in request.files:
-            return "No file part"
+#     if request.method == "POST":
+#         if "files" not in request.files:
+#             return "No file part"
 
-    # for each file, call process_document(file, file_path)
+#     # for each file, call process_document(file, file_path)
 
-    return {'success': True}
+#     return {'success': True}
 
 
 def embed_query(query):
@@ -64,8 +74,8 @@ def generate_summary(chunks):
     # return summaries
     pass
 
-@app.route('/submit_query', methods=['GET'])
-def submit_query():
+# @app.route('/submit_query', methods=['GET'])
+# def submit_query():
     # get query from request
 
     # call embed_query(query)
@@ -79,3 +89,8 @@ def submit_query():
     # return chunks, summaries, file_paths
 
     return {'success': True}
+
+if __name__ == '__main__':
+    file_path = "test/test_chunk"
+    chunk = "This is a test chunk"
+    print(store_chunk_in_mongo(file_path, chunk))
