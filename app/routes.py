@@ -21,8 +21,8 @@ def store_chunk_in_mongo(file_path, chunk):
     result = collection.insert_one(document)
     return str(result.inserted_id)
 
-def embed_chunk(chunk):
-    tokens = tokenizer(chunk, return_tensors="pt", padding=True, truncation=True)
+def store_chunk_in_pinecone(chunk):
+    tokens = tokenizer(chunk, return_tensors="pt", padding=True, truncation=False)
 
     with torch.no_grad():
         outputs = model(**tokens)
@@ -35,14 +35,20 @@ def store_embedding(embeddings, id):
 
 def process_chunk(file_path, chunk):
     id = store_chunk_in_mongo(file_path, chunk)
-    embeddings = embed_chunk(chunk)
+    embeddings = store_chunk_in_pinecone(chunk)
     store_embedding(embeddings, id)
     return id
 
+def chunk_document(file):
+    tokens = tokenizer.tokenize(file)
+    chunks = []
+    for i in range(0, len(tokens), 512 - 50):
+        chunk = tokens[i:i + 512]
+        chunks.append(tokenizer.convert_tokens_to_string(chunk))
+    return chunks
 
-
-def process_document(file, file_path):
-    # chunk document
+def process_document(file_path, file):
+    # chunk_document(file)
 
     # for each chunk, call process_chunk(chunk)
 
@@ -98,6 +104,4 @@ def generate_summary(chunks):
     return {'success': True}
 
 if __name__ == '__main__':
-    chunk = "This is a test chunk"
-    file_path = "test_file.txt"
-    print(process_chunk(file_path, chunk))
+    pass
