@@ -12,7 +12,7 @@ from bson import ObjectId
 import traceback
 client = OpenAI(api_key="")
 from .pine import index, tokenizer, model
-from .parser import parse_pdf
+from .parser import parse_pdf, parse_docx
 import json
 
 @app.route('/', methods=['GET'])
@@ -66,7 +66,7 @@ def embed_folder():
     pathnames = request.form.getlist('pathnames')
 
     for file, pathname in zip(files, pathnames):
-        file_content = parse_pdf(file)
+        file_content = parse_docx(file)
         if not process_document(pathname, file_content):
             return {'success': False}, 401
     
@@ -82,37 +82,32 @@ def similarity_search(embedding):
     response = json.loads(str(response).replace("'", '"'))
     return [r['id'] for r in response['matches']]
 
-def retrieve_chunks(ids: List[str]) -> List[Tuple[str, str]]:
-    try:
-        object_ids = [ObjectId(id_str) for id_str in ids]
-        
-        chunks = collection.find({'_id': {'$in': object_ids}})
-        
-        chunks_list = list(chunks)
-        
-        chunks_dict = {
-            str(chunk['_id']): (chunk['file_path'], chunk['content']) 
-            for chunk in chunks_list
-        }
-        
-        results = []
-        for id_str in ids:
-            if id_str in chunks_dict:
-                results.append(chunks_dict[id_str])
-            else:
-                print(f"Document with id {id_str} not found")
-                results.append((None, None))
-                
-        return results
-        
-    except Exception as e:
-        print(f"Error retrieving chunks: {str(e)}")
-        traceback.print_exc()
-        return [(None, None)] * len(ids)
+def retrieve_chunks(ids: List[str]):
+    object_ids = [ObjectId(id_str) for id_str in ids]
+    
+    chunks = collection.find({'_id': {'$in': object_ids}})
+    
+    chunks_list = list(chunks)
+    
+    chunks_dict = {
+        str(chunk['_id']): (chunk['file_path'], chunk['content']) 
+        for chunk in chunks_list
+    }
+    
+    results = []
+    for id_str in ids:
+        if id_str in chunks_dict:
+            results.append(chunks_dict[id_str])
+        else:
+            print(f"Document with id {id_str} not found")
+            results.append((None, None))
+            
+    file_paths = [result[0] for result in results]
+    chunks = [result[1] for result in results]
+    
+    return file_paths, chunks
 
-def generate_summary():
-    # feed chunks into llm
-    # return summaries
+def generate_summary(chunks):
     summaries = []
     
     for chunk in chunks:
@@ -137,14 +132,9 @@ def submit_query():
     q = request.args.get('q')
     embedding = embed_query(q)
     ids = similarity_search(embedding)
-
-    call retrieve_chunks(ids)
-
-    # call generate_summary(chunks)
-
-    # return chunks, summaries, file_paths
-
-    return {'success': True}
+    file_paths, chunks = retrieve_chunks(ids)
+    summaries = generate_summary(chunks)
+    return {"chunks" : chunks, "summaries" : summaries, "file_paths" : file_paths}
 
 if __name__ == '__main__':
     file_path = "test.txt"
