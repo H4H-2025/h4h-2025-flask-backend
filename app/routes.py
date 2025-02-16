@@ -66,16 +66,17 @@ def process_document(file_path, file):
 
     # return {'success': True}
 
-
-def embed_query(query):
-    # embed query
-    # return embedding
-    pass
-
 def similarity_search(embedding):
+    response = index.query(namespace="ns1", vector=embedding, top_k=2, include_values=True, include_metadata=True,)
+    context = ""
+    for match in response['matches']:
+        results = client['chunks']['shadcn'].find_one({ "_id" : ObjectId(match['id']) })
+        content = results['chunk']
+        context += content
+        context += '\n\n'
+    return context
     # call pinecone to get similar embeddings
     # return similar embeddings
-    pass
 
 def retrieve_chunks(ids):
     # for each id, retrieve chunk from pinecone
@@ -86,6 +87,9 @@ def generate_summary(chunks):
     # feed chunks into llm
     # return summaries
     pass
+
+def embed_query(query):
+    return embed_chunk(query)
 
 # @app.route('/submit_query', methods=['GET'])
 # def submit_query():
