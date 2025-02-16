@@ -1,4 +1,6 @@
 from app import app
+from flask import request, jsonify, make_response
+from flask_cors import cross_origin
 from bson import ObjectId
 import logging
 from typing import Optional, Tuple
@@ -12,9 +14,10 @@ import traceback
 from .pine import index, tokenizer, model
 from .parser import parse_pdf, parse_docx
 import json
-from flask import Flask, request, jsonify
+from io import BytesIO
+from docx import Document
 
-client = Groq(api_key="")
+client = Groq(api_key="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")
 
 @app.route('/', methods=['GET'])
 def home_page():
@@ -61,6 +64,34 @@ def process_document(file_path, file):
         process_chunk(file_path, chunk)
     return {'success': True}
 
+
+@app.route('/embed_file', methods=['POST'])
+def embed_file():
+    file = request.data
+    file_path = request.args.get('filename')
+    file_type = request.args.get('type')
+
+    return {'success': True}, 200
+    if not file_path or not file_type:
+        return make_response(jsonify({"message": "Filename and type are required"}), 400)
+
+    # Log the content type and the first few bytes of the file content
+    print(f"Content-Type: {file_type}")
+    print(f"File Content (first 100 bytes): {file[:100]}")
+
+    try:
+        file_stream = BytesIO(file)
+        doc = Document(file_stream)
+        file_content = "\n".join([paragraph.text for paragraph in doc.paragraphs])
+    except Exception as e:
+        print(f"Error processing docx file: {e}")
+        return make_response(jsonify({"message": "Error processing docx file"}), 400)
+
+    process_document(file_path, file_content)
+    response = make_response(jsonify({"message": "File embedded successfully"}), 200)
+    return response
+        
+
 @app.route('/embed_folder', methods=['POST'])
 def embed_folder():
     files = request.files.getlist('files')
@@ -73,7 +104,7 @@ def embed_folder():
         elif file.filename.endswith('.docx'):
             file_content = parse_docx(file)
         else:
-            return {'success': False}, 401
+            continue
 
         if not process_document(pathname, file_content):
             return {'success': False}, 401
@@ -137,31 +168,14 @@ def embed_query(query):
 
 @app.route('/submit_query', methods=['POST'])
 def submit_query():
-    data = request.get_json()
-    
-    if not data or "queries" not in data:
-        return jsonify({"error": "No queries provided"}), 400
-
-    queries = data["queries"]
-    
-    if not isinstance(queries, list):
-        return jsonify({"error": "Queries should be a list"}), 400
-    
-    results = []
-
-    for query in queries:
-        embedding = embed_query(query)
-        ids = similarity_search(embedding)
-        file_paths, chunks = retrieve_chunks(ids)
-
-        if not chunks:
-            results.append({"query": query, "summary": "No relevant documents found."})
-            continue
-
-        summary = generate_summary(chunks)
-        results.append({"query": query, "summary": summary})
-    
-    return jsonify({"results": results})
+    q = request.args.get('q')
+    embedding = embed_query(q)
+    ids = similarity_search(embedding)
+    file_paths, chunks = retrieve_chunks(ids)
+    summaries = generate_summary(chunks)
+    resp = make_response(jsonify({"chunks": chunks, "summaries": summaries, "file_paths": file_paths}), 200)
+    resp.headers['Access-Control-Allow-Origin'] = '*'
+    return resp
 
 if __name__ == '__main__':
     pass
